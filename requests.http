@@ -1,0 +1,98 @@
+@base = http://localhost:8000
+@student_id = 1
+
+###
+GET {{base}}/health
+
+###
+POST {{base}}/api/students
+Content-Type: application/json
+
+{
+  "full_name": "Иванов Иван",
+  "school_class": "8А",
+  "status": "active"
+}
+
+###
+GET {{base}}/api/students
+
+###
+GET {{base}}/api/students?school_class=8А
+
+###
+GET {{base}}/api/students?limit=2&offset=0
+
+###
+GET {{base}}/api/students?limit=2&offset=2
+
+###
+GET {{base}}/api/students?school_class=8А&status=active&limit=10&offset=0
+
+###
+GET {{base}}/api/students/{{student_id}}
+
+###
+PATCH {{base}}/api/students/{{student_id}}
+Content-Type: application/json
+
+{
+  "school_class": "9А"
+}
+
+###
+DELETE {{base}}/api/students/{{student_id}}
+
+###
+GET {{base}}/api/students/{{student_id}}
+
+###
+GET {{base}}/api/students/999999
+
+###
+POST {{base}}/api/students
+Content-Type: application/json
+
+{
+  "full_name": "",
+  "school_class": "8А"
+}
+
+###
+POST {{base}}/api/students
+Content-Type: application/json
+
+{
+  "full_name": "Иванов Иван"
+}
+
+###
+POST {{base}}/api/students
+Content-Type: application/json
+
+{
+  "full_name": "Иванов Иван",
+  "school_class": "12А"
+}
+
+###
+POST {{base}}/api/students
+Content-Type: application/json
+
+{
+  "full_name": "Иванов Иван",
+  "school_class": "8А",
+  "status": "unknown"
+}
+
+###
+POST {{base}}/api/students
+Content-Type: application/json
+
+{"full_name":
+
+###
+GET {{base}}/api/students?limit=0
+
+###
+GET {{base}}/health

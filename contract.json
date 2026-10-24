@@ -1,0 +1,16 @@
+{
+  "base_url": "http://localhost:8000",
+  "resource": "students",
+  "id_field": "id",
+  "missing_id": "999999",
+  "list_key": null,
+  "create": {"full_name": "Иванов Иван Иванович", "school_class": "8А", "status": "active"},
+  "update": {"school_class": "9А"},
+  "required_field": "full_name",
+  "errors": [
+    {"body": {"full_name": ""}, "field": "full_name"},
+    {"body": {"school_class": "12А"}, "field": "school_class"},
+    {"body": {"status": "unknown"}, "field": "status"}
+  ],
+  "filter": {"param": "school_class", "value": "8А", "other": "9Б"}
+}

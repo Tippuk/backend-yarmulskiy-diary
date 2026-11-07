@@ -1,3 +1,4 @@
+import pytest
 from fastapi.testclient import TestClient
 
 from app import main
@@ -5,9 +6,11 @@ from app import main
 client = TestClient(main.app)
 
 
-def setup_function():
-    main.students.clear()
-    main.next_id = 1
+@pytest.fixture(autouse=True)
+def test_database(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "test.db"))
+    with client:
+        yield
 
 
 def test_health():
@@ -67,6 +70,56 @@ def test_delete_student():
     assert response.status_code == 204
     assert response.content == b""
     assert client.get("/api/students/1").status_code == 404
+
+
+def test_grades():
+    student = {"full_name": "Иванов Иван", "school_class": "8А"}
+    client.post("/api/students", json=student)
+    client.post("/api/students", json=student)
+    grade = {"subject": "Математика", "score": 5, "date": "2026-11-07"}
+    path = "/api/students/1/grades"
+
+    response = client.post(path, json=grade)
+    assert response.status_code == 201
+    assert response.json()["student_id"] == 1
+    assert client.get(path).json() == [response.json()]
+    assert client.get("/api/students/2/grades").json() == []
+    assert client.post("/api/students/999999/grades", json=grade).status_code == 404
+    assert client.post(path, json={**grade, "score": 6}).status_code == 400
+    assert client.post(path, json={**grade, "date": "2026-02-30"}).status_code == 400
+
+    assert client.delete("/api/students/1").status_code == 204
+    assert client.get(path).status_code == 404
+
+
+def test_sql_is_stored_as_text():
+    name = "'); DROP TABLE students;--"
+    response = client.post("/api/students", json={"full_name": name, "school_class": "8А"})
+    assert response.status_code == 201
+    assert client.get("/api/students/1").json()["full_name"] == name
+
+
+def test_search_ignores_case():
+    client.post("/api/students", json={"full_name": "ИВАНОВ Иван", "school_class": "8А"})
+    client.post("/api/students", json={"full_name": "Иванова Анна", "school_class": "9Б"})
+    rows = client.get("/api/students", params={"q": "иванов", "school_class": "8А"}).json()
+    assert [row["full_name"] for row in rows] == ["ИВАНОВ Иван"]
+    assert client.get("/api/students", params={"q": "%' OR 1=1 --"}).json() == []
+
+
+def test_duplicate_grade_and_stats():
+    student = {"full_name": "Иванов Иван", "school_class": "8А"}
+    client.post("/api/students", json=student)
+    client.post("/api/students", json=student)
+    grade = {"subject": "Математика", "score": 5, "date": "2026-11-07"}
+    path = "/api/students/1/grades"
+    assert client.post(path, json=grade).status_code == 201
+    assert client.post(path, json={**grade, "score": 4}).status_code == 409
+    assert len(client.get(path).json()) == 1
+    assert client.post("/api/students/2/grades", json={**grade, "score": 3}).status_code == 201
+    assert client.get("/api/students/stats").json() == [
+        {"subject": "Математика", "average_score": 4.0, "grade_count": 2}
+    ]
 
 
 def test_missing_student():
@@ -151,12 +204,8 @@ def test_filter_and_pages():
     assert students[0]["id"] == 3
     assert client.get("/api/students?offset=100").json() == []
 
-    response = client.get("/api/students?status=inactive")
-    assert response.json() == []
-
-
 def test_bad_filters():
-    for query in ["limit=0", "offset=-1", "limit=abc", "status=bad", "school_class=12А"]:
+    for query in ["limit=0", "offset=-1", "limit=abc", "school_class=12А"]:
         response = client.get("/api/students?" + query)
         assert response.status_code == 400
 
@@ -164,7 +213,9 @@ def test_bad_filters():
 def test_docs():
     assert client.get("/docs").status_code == 200
     response = client.get("/openapi.json")
-    assert "/api/students" in response.json()["paths"]
+    paths = response.json()["paths"]
+    assert paths["/api/students"]["post"]["summary"] == "Добавить ученика"
+    assert paths["/api/students/{student_id}/grades"]["get"]["tags"] == ["Оценки"]
 
 
 def test_request_log(caplog):

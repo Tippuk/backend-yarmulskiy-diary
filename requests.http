@@ -27,7 +27,7 @@ GET {{base}}/api/students?limit=2&offset=0
 GET {{base}}/api/students?limit=2&offset=2
 
 ###
-GET {{base}}/api/students?school_class=8А&status=active&limit=10&offset=0
+GET {{base}}/api/students?school_class=8А&limit=10&offset=0
 
 ###
 GET {{base}}/api/students/{{student_id}}
@@ -39,6 +39,15 @@ Content-Type: application/json
 {
   "school_class": "9А"
 }
+
+###
+POST {{base}}/api/students/{{student_id}}/grades
+Content-Type: application/json
+
+{"subject": "Математика", "score": 5, "date": "2026-11-07"}
+
+###
+GET {{base}}/api/students/{{student_id}}/grades
 
 ###
 DELETE {{base}}/api/students/{{student_id}}
@@ -96,3 +105,9 @@ GET {{base}}/api/students?limit=0
 
 ###
 GET {{base}}/health
+
+###
+GET {{base}}/api/students?q=иванов
+
+###
+GET {{base}}/api/students/stats

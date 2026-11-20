@@ -1,11 +1,30 @@
 @base = http://localhost:8000
 @student_id = 1
+@basic = Basic dGVhY2hlcjp0ZXN0LXBhc3M=
+
+
+###
+POST {{base}}/auth/register
+Content-Type: application/json
+
+{"username": "teacher", "password": "test-pass"}
+
+###
+GET {{base}}/auth/me
+Authorization: {{basic}}
+
+###
+POST {{base}}/auth/login
+Content-Type: application/json
+
+{"username": "teacher", "password": "test-pass"}
 
 ###
 GET {{base}}/health
 
 ###
 POST {{base}}/api/students
+Authorization: {{basic}}
 Content-Type: application/json
 
 {
@@ -34,6 +53,7 @@ GET {{base}}/api/students/{{student_id}}
 
 ###
 PATCH {{base}}/api/students/{{student_id}}
+Authorization: {{basic}}
 Content-Type: application/json
 
 {
@@ -42,6 +62,7 @@ Content-Type: application/json
 
 ###
 POST {{base}}/api/students/{{student_id}}/grades
+Authorization: {{basic}}
 Content-Type: application/json
 
 {"subject": "Математика", "score": 5, "date": "2026-11-07"}
@@ -51,6 +72,7 @@ GET {{base}}/api/students/{{student_id}}/grades
 
 ###
 DELETE {{base}}/api/students/{{student_id}}
+Authorization: {{basic}}
 
 ###
 GET {{base}}/api/students/{{student_id}}
@@ -60,6 +82,7 @@ GET {{base}}/api/students/999999
 
 ###
 POST {{base}}/api/students
+Authorization: {{basic}}
 Content-Type: application/json
 
 {
@@ -69,6 +92,7 @@ Content-Type: application/json
 
 ###
 POST {{base}}/api/students
+Authorization: {{basic}}
 Content-Type: application/json
 
 {
@@ -77,6 +101,7 @@ Content-Type: application/json
 
 ###
 POST {{base}}/api/students
+Authorization: {{basic}}
 Content-Type: application/json
 
 {
@@ -86,6 +111,7 @@ Content-Type: application/json
 
 ###
 POST {{base}}/api/students
+Authorization: {{basic}}
 Content-Type: application/json
 
 {
@@ -96,6 +122,7 @@ Content-Type: application/json
 
 ###
 POST {{base}}/api/students
+Authorization: {{basic}}
 Content-Type: application/json
 
 {"full_name":

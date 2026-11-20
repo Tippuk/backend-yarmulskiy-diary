@@ -1,6 +1,4 @@
 import logging
-import os
-import sqlite3
 from contextlib import asynccontextmanager, closing
 from datetime import date
 from pathlib import Path
@@ -13,13 +11,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, RedirectResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-# Подключение к файлу SQLite
-def connect():
-    db = sqlite3.connect(os.getenv("DATABASE_PATH", "diary.db"))
-    db.row_factory = sqlite3.Row
-    db.execute("PRAGMA foreign_keys = ON")
-    db.create_function("casefold", 1, str.casefold)
-    return db
+from app.auth import create_admin, current_user, router
+from app.db import connect, get_db
 
 
 def migrate():
@@ -31,16 +24,13 @@ def migrate():
 @asynccontextmanager
 async def lifespan(app):
     migrate()
+    with closing(connect()) as db:
+        create_admin(db)
     yield
 
 
-# Отдельное подключение к базе для каждого запроса
-async def get_db():
-    with closing(connect()) as db:
-        yield db
-
-
 app = FastAPI(title="Электронный дневник", lifespan=lifespan)
+app.include_router(router)
 logger = logging.getLogger("uvicorn.error")
 
 
@@ -141,6 +131,14 @@ def find_student(db, student_id):
     return dict(row)
 
 
+# Изменять ученика и его оценки может владелец или администратор.
+async def owned_student(student_id: int, user=Depends(current_user), db=Depends(get_db)):
+    student = find_student(db, student_id)
+    if user["role"] != "admin" and student["owner_id"] != user["id"]:
+        raise HTTPException(403, "Изменять запись может только владелец или администратор")
+    return student
+
+
 # Проверка работы сервера
 @app.get("/health", tags=["Сервер"], summary="Проверить работу сервера",
          response_description="Сервер работает")
@@ -154,12 +152,15 @@ async def health():
 async def create_student(
     data: dict = Body(examples=[{"full_name": "Иванов Иван", "school_class": "8А"}]),
     db=Depends(get_db),
+    user=Depends(current_user),
 ):
-    student = check_student(data, creating=True)
+    student = check_student({key: value for key, value in data.items() if key != "owner_id"},
+                            creating=True)
+    student["owner_id"] = user["id"]
     with db:
         cursor = db.execute(
-            "INSERT INTO students (full_name, school_class, status) VALUES (?, ?, ?)",
-            (student["full_name"], student["school_class"], student["status"]),
+            "INSERT INTO students (full_name, school_class, status, owner_id) VALUES (?, ?, ?, ?)",
+            (student["full_name"], student["school_class"], student["status"], student["owner_id"]),
         )
     student["id"] = cursor.lastrowid
     return student
@@ -215,9 +216,9 @@ async def get_student(student_id: int, db=Depends(get_db)):
 @app.patch("/api/students/{student_id}", tags=["Ученики"], summary="Изменить данные ученика",
            response_description="Обновлённые данные ученика")
 async def update_student(
-    student_id: int, data: dict = Body(examples=[{"school_class": "9А"}]), db=Depends(get_db)
+    student_id: int, data: dict = Body(examples=[{"school_class": "9А"}]),
+    db=Depends(get_db), student=Depends(owned_student),
 ):
-    student = find_student(db, student_id)
     student.update(check_student(data))
     with db:
         db.execute(
@@ -230,8 +231,7 @@ async def update_student(
 # Удаление ученика и его оценок
 @app.delete("/api/students/{student_id}", status_code=204, tags=["Ученики"],
             summary="Удалить ученика", response_description="Ученик и его оценки удалены")
-async def delete_student(student_id: int, db=Depends(get_db)):
-    find_student(db, student_id)
+async def delete_student(student_id: int, db=Depends(get_db), student=Depends(owned_student)):
     with db:
         db.execute("DELETE FROM students WHERE id = ?", (student_id,))
     return Response(status_code=204)
@@ -245,6 +245,7 @@ async def create_grade(
     student_id: int,
     data: dict = Body(examples=[{"subject": "Математика", "score": 5, "date": "2026-11-07"}]),
     db=Depends(get_db),
+    student=Depends(owned_student),
 ):
     subject = data.get("subject")
     score = data.get("score")

@@ -1,7 +1,11 @@
+from contextlib import closing
+
 import pytest
 from fastapi.testclient import TestClient
 
 from app import main
+from app.auth import failures
+from app.db import connect
 
 client = TestClient(main.app)
 
@@ -9,14 +13,62 @@ client = TestClient(main.app)
 @pytest.fixture(autouse=True)
 def test_database(tmp_path, monkeypatch):
     monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "test.db"))
+    monkeypatch.setenv("JWT_SECRET", "test-secret-with-at-least-32-bytes")
+    monkeypatch.setenv("ADMIN_USERNAME", "admin")
+    monkeypatch.setenv("ADMIN_PASSWORD", "admin-test-pass")
+    failures.clear()
     with client:
-        yield
+        assert client.post("/auth/register", json={"username": "teacher", "password": "test-pass"}).status_code == 201
+        client.auth = ("teacher", "test-pass")
+        try:
+            yield
+        finally:
+            client.auth = None
 
 
 def test_health():
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+
+def test_registration_and_ownership():
+    credentials = {"username": "other", "password": "other-pass", "role": "admin"}
+    assert client.post("/auth/register", json=credentials).json()["role"] == "user"
+    assert client.post("/auth/register", json=credentials).status_code == 409
+    with closing(connect()) as db:
+        row = db.execute("SELECT password_hash FROM users WHERE username = ?", ("other",)).fetchone()
+        assert row["password_hash"].startswith("$argon2id$")
+
+    user = client.get("/auth/me").json()
+    assert set(user) == {"id", "username", "role"}
+    data = {"full_name": "Иванов Иван", "school_class": "8А", "owner_id": 999}
+    assert client.post("/api/students", json=data, auth=None).status_code == 401
+    student = client.post("/api/students", json=data).json()
+    assert student["owner_id"] == user["id"]
+    path = f"/api/students/{student['id']}"
+    assert client.get(path, auth=None).status_code == 200
+    other = ("other", "other-pass")
+    assert client.patch(path, json={"school_class": "9А"}, auth=other).status_code == 403
+    assert client.delete(path, auth=other).status_code == 403
+    grade = {"subject": "Математика", "score": 5, "date": "2026-11-07"}
+    assert client.post(path + "/grades", json=grade, auth=other).status_code == 403
+    assert client.delete(path, auth=("admin", "admin-test-pass")).status_code == 204
+
+
+def test_jwt_and_login_limit(monkeypatch):
+    data = {"username": "teacher", "password": "test-pass"}
+    token = client.post("/auth/login", json=data).json()["access_token"]
+    auth = {"Authorization": f"Bearer {token}"}
+    assert client.get("/auth/me", headers=auth, auth=None).json()["username"] == "teacher"
+    assert client.get("/auth/me", headers={"Authorization": "Bearer invalid"}, auth=None).status_code == 401
+    monkeypatch.setenv("JWT_TTL_SECONDS", "-1")
+    expired = client.post("/auth/login", json=data).json()["access_token"]
+    assert client.get("/auth/me", headers={"Authorization": f"Bearer {expired}"}, auth=None).status_code == 401
+    wrong = {"username": "teacher", "password": "wrong-pass"}
+    for _ in range(5):
+        assert client.post("/auth/login", json=wrong).status_code == 401
+    assert client.post("/auth/login", json=wrong).status_code == 429
 
 
 def test_home():

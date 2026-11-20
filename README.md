@@ -7,16 +7,13 @@
 | Главная сущность | Ученик |
 | Связанная сущность (1:N) | Оценка: у одного ученика может быть несколько оценок |
 | Фишка | Одна оценка по предмету за день и средний балл по предметам |
-| Стек | Python 3.10+, FastAPI, SQLite |
+| Стек | Python, FastAPI, SQLite, Alembic, Argon2, PyJWT |
 
 ## Как запустить
 
-Команды для PowerShell. Первые две команды нужны только после публикации ветки `lab2`, если проект ещё не скачан. Для локальной проверки начни из папки `D:\back`.
+Команды для PowerShell из папки проекта `D:\back`.
 
 ```powershell
-git clone -b lab2 https://github.com/Tippuk/backend-yarmulskiy-diary.git
-cd backend-yarmulskiy-diary
-python -m venv .venv
 .\.venv\Scripts\python -m pip install -r requirements.txt
 $env:DATABASE_PATH = "diary.db"
 .\.venv\Scripts\python -m uvicorn app.main:app --port 8000
@@ -31,15 +28,31 @@ $env:DATABASE_PATH = "diary.db"
 .\.venv\Scripts\python -m app.seed
 ```
 
-Миграция `001` создаёт таблицы из [схемы SQLite](app/schema.sql), а `002` добавляет индексы. Если в старой базе уже есть дубли оценок, миграция остановится и не удалит данные. Для проверки можно указать новый файл базы в `DATABASE_PATH`.
+Миграция `001` создаёт таблицы из [схемы SQLite](app/schema.sql), `002` добавляет индексы, а `003` добавляет пользователей и владельца записи. Старые и демонстрационные записи без владельца может менять только администратор. Если в старой базе уже есть дубли оценок, миграция индексов остановится и не удалит данные.
 
 Сервис работает на [localhost:8000](http://localhost:8000). Swagger — на [localhost:8000/docs](http://localhost:8000/docs). Запросы для демонстрации — в [requests.http](requests.http).
+
+Если окружения ещё нет, сначала выполни `python -m venv .venv`.
+
+Для JWT и администратора задай настройки **до запуска сервера**, в том же PowerShell:
+
+```powershell
+$env:JWT_SECRET = python -c "import secrets; print(secrets.token_hex(32))"
+$env:JWT_TTL_SECONDS = "3600"
+$env:ADMIN_USERNAME = "admin"
+$env:ADMIN_PASSWORD = Read-Host "Пароль нового администратора (от 8 символов)" -MaskInput
+```
+
+Без JWT-секрета Basic Auth работает, а выдача токена отключена. Администратор создаётся при первом запуске с этими настройками; повторный запуск не меняет его пароль. Basic Auth на локальном стенде удобен для проверки; вне локального стенда нужен HTTPS.
 
 ## Эндпоинты
 
 | Метод | Путь | Что делает | Ответ |
 | --- | --- | --- | --- |
 | GET | `/health` | Проверить сервер | 200 `{"status":"ok"}` |
+| POST | `/auth/register` | Создать пользователя | 201; 400; 409 |
+| POST | `/auth/login` | Получить JWT | 200; 400; 401; 429; 503 без настройки JWT |
+| GET | `/auth/me` | Получить профиль без пароля | 200; 401 |
 | POST | `/api/students` | Добавить ученика | 201 и ученик с `id`; 400 |
 | GET | `/api/students` | Получить список, искать по ФИО через `q` | 200; 400 |
 | GET | `/api/students/stats` | Получить средний балл и количество оценок по предметам | 200 |
@@ -50,6 +63,10 @@ $env:DATABASE_PATH = "diary.db"
 | GET | `/api/students/{id}/grades` | Получить оценки ученика | 200; 400; 404 |
 
 Поиск `/api/students?q=иванов` находит и «Иванов», и «ИВАНОВ». SQLite ищет совпадение после приведения ФИО и запроса к одному регистру. Повторную оценку по тому же предмету в тот же день для того же ученика блокирует уникальный индекс при вставке.
+
+Чтение дневника открыто. Для записи войди через **Authorize** в Swagger или передай заголовок Basic/Bearer. Без входа ответ будет `401`, при попытке изменить чужую запись — `403`. Сервер сам ставит `owner_id` из профиля. Оценки может добавлять владелец ученика или администратор. После пяти неудач за минуту для пары IP и логина следующая попытка даёт `429`; счётчик хранится в памяти процесса.
+
+Для проверки используй `backcheck --lab 3 --stars` на отдельной базе. Администратор из `contract.json` — только тестовый: для проверки роли настрой `ADMIN_USERNAME=admin` и `ADMIN_PASSWORD=admin-test-pass` при запуске **новой тестовой базы**.
 
 ### Индекс для списка по классу
 
@@ -68,12 +85,20 @@ SEARCH students USING INDEX ix_students_class (school_class=?)
 
 ```mermaid
 erDiagram
+    users o|--o{ students : "владеет"
     students ||--o{ grades : "получает"
+    users {
+        int id PK
+        text username UK
+        text password_hash
+        text role
+    }
     students {
         int id PK
         text full_name
         text school_class
         text status
+        int owner_id FK
     }
     grades {
         int id PK

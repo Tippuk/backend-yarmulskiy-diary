@@ -1,0 +1,47 @@
+{
+  "base_url": "http://localhost:8000",
+  "resource": "students",
+  "id_field": "id",
+  "missing_id": "999999",
+  "list_key": null,
+  "create": {"full_name": "Иванов Иван Иванович", "school_class": "8А", "status": "active"},
+  "update": {"school_class": "9А"},
+  "required_field": "full_name",
+  "errors": [
+    {"body": {"full_name": ""}, "field": "full_name"},
+    {"body": {"school_class": "12А"}, "field": "school_class"},
+    {"body": {"status": "unknown"}, "field": "status"}
+  ],
+  "filter": {"param": "school_class", "value": "8А", "other": "9Б"},
+  "text_field": "full_name",
+  "search": {"param": "q", "field": "full_name"},
+  "child": {
+    "resource": "grades",
+    "create": {"subject": "Математика", "score": 5, "date": "2026-11-07"},
+    "parent_field": "student_id"
+  },
+  "rule": {
+    "description": "Одна оценка ученику по одному предмету за дату",
+    "setup": [
+      {"method": "POST", "path": "/api/students/{id}/grades",
+       "body": {"subject": "Математика", "score": 5, "date": "2026-11-07"}}
+    ],
+    "violate": {
+      "method": "POST", "path": "/api/students/{id}/grades",
+      "body": {"subject": "Математика", "score": 4, "date": "2026-11-07"}
+    },
+    "expect_status": 409
+  },
+  "stats_path": "/api/students/stats",
+  "auth": {
+    "scheme": "basic",
+    "register_path": "/auth/register",
+    "login_path": "/auth/login",
+    "me_path": "/auth/me",
+    "login_field": "username",
+    "password_field": "password",
+    "token_field": "access_token",
+    "owner_field": "owner_id",
+    "admin": {"username": "admin", "password": "admin-test-pass"}
+  }
+}

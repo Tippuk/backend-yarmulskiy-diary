@@ -1,0 +1,140 @@
+@base = http://localhost:8000
+@student_id = 1
+@basic = Basic dGVhY2hlcjp0ZXN0LXBhc3M=
+
+
+###
+POST {{base}}/auth/register
+Content-Type: application/json
+
+{"username": "teacher", "password": "test-pass"}
+
+###
+GET {{base}}/auth/me
+Authorization: {{basic}}
+
+###
+POST {{base}}/auth/login
+Content-Type: application/json
+
+{"username": "teacher", "password": "test-pass"}
+
+###
+GET {{base}}/health
+
+###
+POST {{base}}/api/students
+Authorization: {{basic}}
+Content-Type: application/json
+
+{
+  "full_name": "Иванов Иван",
+  "school_class": "8А",
+  "status": "active"
+}
+
+###
+GET {{base}}/api/students
+
+###
+GET {{base}}/api/students?school_class=8А
+
+###
+GET {{base}}/api/students?limit=2&offset=0
+
+###
+GET {{base}}/api/students?limit=2&offset=2
+
+###
+GET {{base}}/api/students?school_class=8А&limit=10&offset=0
+
+###
+GET {{base}}/api/students/{{student_id}}
+
+###
+PATCH {{base}}/api/students/{{student_id}}
+Authorization: {{basic}}
+Content-Type: application/json
+
+{
+  "school_class": "9А"
+}
+
+###
+POST {{base}}/api/students/{{student_id}}/grades
+Authorization: {{basic}}
+Content-Type: application/json
+
+{"subject": "Математика", "score": 5, "date": "2026-11-07"}
+
+###
+GET {{base}}/api/students/{{student_id}}/grades
+
+###
+DELETE {{base}}/api/students/{{student_id}}
+Authorization: {{basic}}
+
+###
+GET {{base}}/api/students/{{student_id}}
+
+###
+GET {{base}}/api/students/999999
+
+###
+POST {{base}}/api/students
+Authorization: {{basic}}
+Content-Type: application/json
+
+{
+  "full_name": "",
+  "school_class": "8А"
+}
+
+###
+POST {{base}}/api/students
+Authorization: {{basic}}
+Content-Type: application/json
+
+{
+  "full_name": "Иванов Иван"
+}
+
+###
+POST {{base}}/api/students
+Authorization: {{basic}}
+Content-Type: application/json
+
+{
+  "full_name": "Иванов Иван",
+  "school_class": "12А"
+}
+
+###
+POST {{base}}/api/students
+Authorization: {{basic}}
+Content-Type: application/json
+
+{
+  "full_name": "Иванов Иван",
+  "school_class": "8А",
+  "status": "unknown"
+}
+
+###
+POST {{base}}/api/students
+Authorization: {{basic}}
+Content-Type: application/json
+
+{"full_name":
+
+###
+GET {{base}}/api/students?limit=0
+
+###
+GET {{base}}/health
+
+###
+GET {{base}}/api/students?q=иванов
+
+###
+GET {{base}}/api/students/stats
